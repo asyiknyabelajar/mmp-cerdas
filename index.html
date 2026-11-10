@@ -63,6 +63,21 @@
         <button id="teacher-stop" class="btn light full">Hentikan suara</button>
         <button id="mic-test" class="btn outline full">Uji mikrofon anak</button><p id="mic-test-status" class="secondary-note">Kalibrasi volume sebelum latihan berbicara.</p>
         <div class="teacher-tools"><label for="tts-speed">Kecepatan suara</label><select id="tts-speed"><option value="0.75">Pelan</option><option value="0.88" selected>Nyaman</option><option value="1">Normal</option></select><small>Gunakan perangkat dengan suara Bahasa Indonesia agar pelafalan lebih sesuai.</small></div>
+
+        <section class="eval-panel" aria-label="Evaluasi perangkat dan latihan oleh pendamping">
+          <button id="eval-toggle" type="button" class="btn outline full" aria-expanded="false" aria-controls="eval-body">Evaluasi fitur &amp; kemajuan</button>
+          <div id="eval-body" hidden>
+            <p class="secondary-note">Untuk orang tua/guru. Status fitur bukan penilaian kemampuan anak. Tidak mengirim rekaman, nama, atau tulisan tangan.</p>
+            <button id="eval-check" type="button" class="btn light full small">Periksa dukungan perangkat</button>
+            <div id="eval-device" class="eval-device" role="status"></div>
+            <p id="eval-progress" class="eval-progress"></p>
+            <div id="eval-rows"></div>
+            <label class="eval-label" for="eval-note">Catatan tanpa nama atau data pribadi anak</label>
+            <textarea id="eval-note" rows="2" maxlength="300" placeholder="Contoh: kata mama tepat; huruf b sulit dikenali"></textarea>
+            <button id="eval-copy" type="button" class="btn primary full small">Salin laporan pengujian anonim</button>
+            <p id="eval-result" class="secondary-note" aria-live="polite"></p>
+          </div>
+        </section>
         <div class="privacy-mini"><strong>Privasi anak</strong><p>Tidak menyimpan audio, foto, atau gambar tulisan tangan. Ketukan nyata pada program memperbarui masa aktif.</p><button id="erase-data" class="text-button">Hapus data anak di perangkat dan server</button></div>
       </aside>
     </div>
@@ -70,5 +85,6 @@
   <script src="js/config.js"></script>
   <script src="js/course-data.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/evaluasi.js"></script>
 </body>
 </html>

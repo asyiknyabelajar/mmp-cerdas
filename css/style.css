@@ -6,3 +6,14 @@
 .record-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:13px;border:1px solid #e4e9df;border-radius:12px;padding:10px;background:#fff}.record-panel small{font-size:11px;color:var(--muted)}.record-panel audio{height:34px;max-width:100%;width:210px}.record-panel button[hidden],.record-panel audio[hidden]{display:none}
 
 .passage-read{font-size:clamp(19px,2vw,25px);line-height:1.8;text-align:left;padding:18px 22px}.comprehension{margin:14px 0 18px;background:#f6f8ef;border:1px solid #e1e9d9;padding:16px;border-radius:14px}.comprehension strong{font-size:14px}.comprehension .choice{font-size:16px;padding:11px}.comprehension .choices{grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
+
+/* MMP v1.4 - lembar evaluasi tanpa data pribadi */
+.write-mode-controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.write-dictation{font-size:clamp(17px,2vw,22px);padding:26px 15px;font-weight:700;line-height:1.5}
+.eval-panel{margin:16px 0 0;padding:12px;border:1px solid #dce6da;border-radius:15px;background:#f9fcf7}
+#eval-body{margin-top:12px}#eval-body[hidden]{display:none}
+.eval-device{font-size:11px;color:#375b46;margin:8px 0;line-height:1.6;white-space:pre-line}
+.eval-progress{font-weight:700;font-size:11px;margin:9px 0}
+.eval-row{border-top:1px solid #dce8db;padding:9px 0}.eval-row label{display:block;font-size:12px;font-weight:700;margin:0 0 5px}
+.eval-row select,.eval-panel textarea{width:100%;border:1px solid #bbd4c1;border-radius:9px;padding:8px;background:#fff;color:#173e2f;font:inherit;font-size:12px}
+.eval-label{display:block;font-size:11px;font-weight:700;margin-top:12px}.eval-panel textarea{resize:vertical;margin:6px 0 10px;min-height:66px}
