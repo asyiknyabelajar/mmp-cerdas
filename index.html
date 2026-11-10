@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#103f32">
+  <meta name="description" content="MMP Cerdas — 96 sesi belajar membaca dan menulis permulaan untuk kelas I SD/MI dengan guru virtual dan empat latihan interaktif.">
+  <title>MMP Cerdas | Pendamping Akademik</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <div id="welcome" class="welcome-shell">
+    <div class="welcome-photo"><img src="assets/guru-virtual.jpg" alt="Potret ilustrasi foto AI Bu Rani, guru virtual MMP Cerdas"><div class="welcome-bubble">Halo, sahabat kecil! Mari belajar bersama.</div></div>
+    <div class="welcome-panel">
+      <span class="eyebrow">PENDAMPING AKADEMIK · KELAS I SD/MI</span>
+      <h1>Selamat datang di <em>MMP Cerdas</em></h1>
+      <p class="lead">Bersama Bu Rani, kita akan belajar mendengarkan, membaca, menulis, dan berbicara. Pelan-pelan, satu langkah setiap hari.</p>
+      <form id="start-form" autocomplete="off">
+        <label for="child-name">Siapa nama panggilanmu?</label>
+        <input id="child-name" maxlength="24" minlength="2" required placeholder="Misalnya: Rara" aria-describedby="name-help">
+        <small id="name-help">Gunakan nama panggilan saja. Jangan masukkan nama lengkap, alamat, atau identitas sekolah.</small>
+        <label class="checkline"><input type="checkbox" id="guardian-agree" required> <span>Saya orang tua/wali atau mendampingi dengan izin orang tua/wali. Saya memahami pemberitahuan privasi dan penggunaan mikrofon.</span></label>
+        <label class="checkline"><input type="checkbox" id="cloud-optin"> <span>Simpan juga ke database daring (opsional, hanya jika Supabase telah dikonfigurasi).</span></label>
+        <button class="btn primary full" type="submit">Mulai belajar dengan Bu Rani</button>
+      </form>
+      <p class="privacy-note">Data kemajuan tersimpan di perangkat dan dihapus saat aplikasi dibuka lagi setelah 4 hari tidak aktif. Audio dan gambar tulisan tidak disimpan oleh aplikasi. Layanan pengenal suara browser dapat memproses audio secara daring. Database daring, bila diaktifkan, memerlukan konfigurasi dan jadwal penghapusan terpisah.</p>
+    </div>
+  </div>
+
+  <div id="workspace" class="workspace" hidden>
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">M<span>+</span></div><div><strong>MMP CERDAS</strong><small>Pendamping Akademik · Literasi Fase A</small></div></div>
+      <div class="top-actions"><span id="sync-status" class="sync-status">Tersimpan di perangkat</span><button id="outline-toggle" class="btn light small">Daftar isi</button><button id="change-user" class="btn outline small" title="Akhiri sesi anak dan kembali ke pilihan nama">Keluar</button></div>
+    </header>
+    <div class="workspace-grid">
+      <aside id="outline" class="outline">
+        <div class="outline-head"><span class="eyebrow">PETA BELAJAR</span><h2>Daftar Isi</h2><p>8 bab · 96 sesi · 4 kegiatan/sesi</p><div class="progress-bar"><span id="sidebar-progress"></span></div><small id="sidebar-progress-text">0 dari 384 latihan</small></div>
+        <div id="outline-list" class="outline-list"></div>
+      </aside>
+      <main class="content">
+        <div class="bread" id="breadcrumb">Beranda / Memulai</div>
+        <section class="lesson-cover">
+          <div class="lesson-cover-copy"><span class="eyebrow" id="chapter-kicker">BAB 1</span><h1 id="lesson-title">Memulai pelajaran</h1><p id="lesson-path">Mendengarkan, membaca, menulis dan berbicara</p><div class="lesson-meta"><span id="lesson-code">MMP-1.1.1-A</span><span id="lesson-position">Sesi 1/96</span></div></div>
+          <div class="cover-spark">Aa<br><span>123</span></div>
+        </section>
+        <div class="goal-card"><div><span class="eyebrow">FOKUS & TUJUAN PEMBELAJARAN (ATP)</span><h3 id="goal-title"></h3><p id="goal-text"></p></div><button id="play-lesson" class="btn gold">Mulai pelajaran & dengarkan ATP</button></div>
+        <section class="practice-wrap">
+          <div class="practice-head"><h2>Latihan bersama Bu Rani</h2><p>Selesaikan setiap kegiatan sesuai urutan atau pilih ulang sesuai kebutuhanmu.</p></div>
+          <div id="task-tabs" class="task-tabs" role="tablist" aria-label="Jenis latihan"></div>
+          <div id="task-area" class="task-area" aria-live="polite"></div>
+          <div id="task-feedback" class="task-feedback" role="status" aria-live="polite"></div>
+          <div class="lesson-bottom"><button class="btn light" id="prev-lesson">Sebelumnya</button><span id="lesson-done">0 dari 4 kegiatan</span><button class="btn primary" id="next-lesson">Materi berikutnya</button></div>
+        </section>
+        <section class="project-box"><span class="eyebrow">PROYEK BAB INI · PjBL</span><h3 id="project-name">Proyek akhir bab</h3><p id="project-info">Buat karya dengan bantuan pendamping.</p><button id="project-toggle" class="btn outline small">Tandai proyek sudah dipresentasikan</button></section>
+        <div class="foot-note">Pengenalan otomatis suara dan tulisan dapat keliru. Hasilnya merupakan bantuan latihan, bukan diagnosis atau penilaian mutlak. Anak sebaiknya tetap didampingi orang tua/guru.</div>
+      </main>
+      <aside class="teacher-panel">
+        <div class="teacher-image"><img src="assets/guru-virtual.jpg" alt="Bu Rani, guru virtual berbasis foto ilustratif AI"><div class="teacher-tag">Bu Rani · Guru virtual</div></div>
+        <h3 id="teacher-hello">Hai, teman!</h3><p id="teacher-speech">Ibu senang menemanimu belajar. Pilih tombol mulai untuk mendengarkan tujuan pelajaran.</p>
+        <button id="teacher-repeat" class="btn primary full">Dengarkan Bu Rani</button>
+        <button id="teacher-stop" class="btn light full">Hentikan suara</button>
+        <button id="mic-test" class="btn outline full">Uji mikrofon anak</button><p id="mic-test-status" class="secondary-note">Kalibrasi volume sebelum latihan berbicara.</p>
+        <div class="teacher-tools"><label for="tts-speed">Kecepatan suara</label><select id="tts-speed"><option value="0.75">Pelan</option><option value="0.88" selected>Nyaman</option><option value="1">Normal</option></select><small>Gunakan perangkat dengan suara Bahasa Indonesia agar pelafalan lebih sesuai.</small></div>
+        <div class="privacy-mini"><strong>Privasi anak</strong><p>Tidak menyimpan audio, foto, atau gambar tulisan tangan. Ketukan nyata pada program memperbarui masa aktif.</p><button id="erase-data" class="text-button">Hapus data anak di perangkat dan server</button></div>
+      </aside>
+    </div>
+  </div>
+  <script src="js/config.js"></script>
+  <script src="js/course-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
