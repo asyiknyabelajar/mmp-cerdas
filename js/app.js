@@ -22,25 +22,31 @@
   async function loadScript(src){if(document.querySelector('script[data-source="'+src+'"]'))return;
     await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.dataset.source=src;script.onload=resolve;script.onerror=()=>reject(Error('Gagal memuat pustaka daring. Periksa internet.'));document.head.append(script)});
   }
-  async function initCloud(){if(!CFG.url||!CFG.publishableKey)throw Error('Alamat dan publishable key Supabase belum diisi di js/config.js.');
+  async function initCloud(freshIdentity=false){if(!CFG.url||!CFG.publishableKey)throw Error('Proyek '+(CFG.projectName||'Supabase')+': alamat Project URL dan publishable key belum diisi pada js/config.js.');
+    if(!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(CFG.url))throw Error('Project URL Supabase tidak sesuai format.');
+    if(/^sb_secret_|^eyJ/i.test(CFG.publishableKey)&&!/^sb_publishable_/i.test(CFG.publishableKey))throw Error('Gunakan publishable key, jangan secret key atau legacy JWT.');
     await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js');
     supa=window.supabase.createClient(CFG.url,CFG.publishableKey,{auth:{persistSession:true,autoRefreshToken:true}});
-    const {data:{session}}=await supa.auth.getSession();
+    let {data:{session},error:sessionError}=await supa.auth.getSession();
+    if(sessionError)throw sessionError;
+    // Identitas anak tidak boleh memakai kembali akun anonim anak sebelumnya.
+    // Supabase menyimpan sesi autentikasi di browser; pergantian anak harus membuat akun baru.
+    if(freshIdentity&&session){const {error}=await supa.auth.signOut();if(error)throw error;session=null;}
     if(!session){const {error}=await supa.auth.signInAnonymously();if(error)throw error;}
     activeCloud=true;
   }
   async function uploadCloud(){if(!supa||!profile||!activeCloud)return;
     const {data:{user},error:userError}=await supa.auth.getUser();if(userError||!user)throw userError||Error('Sesi tidak tersedia');
     const record={id:user.id,nickname:profile.name,progress:profile.progress,projects:profile.projects,last_lesson:profile.lastLesson};
-    const {error}=await supa.from('child_profiles').upsert(record,{onConflict:'id'});
+    const {error}=await supa.from('mmp_child_profiles').upsert(record,{onConflict:'id'});
     if(error)throw error;syncMsg('Progres tersinkron · Supabase');
   }
   async function maybeDownloadCloud(){if(!supa||!profile)return;
     const {data:{user}}=await supa.auth.getUser();if(!user)return;
-    const {data,error}=await supa.from('child_profiles').select('nickname,progress,projects,last_lesson,last_active').eq('id',user.id).maybeSingle();
+    const {data,error}=await supa.from('mmp_child_profiles').select('nickname,progress,projects,last_lesson,last_active').eq('id',user.id).maybeSingle();
     if(error)throw error;
     if(data){const last=new Date(data.last_active).getTime();
-      if(!last||Date.now()-last>=TTL){await supa.from('child_profiles').delete().eq('id',user.id);syncMsg('Profil daring lama telah kedaluwarsa');return}
+      if(!last||Date.now()-last>=TTL){await supa.from('mmp_child_profiles').delete().eq('id',user.id);syncMsg('Profil daring lama telah kedaluwarsa');return}
       // Use the database for remote continuity, provided the session is still active.
       profile.progress={...(data.progress||{}),...profile.progress};profile.projects={...(data.projects||{}),...profile.projects};
       if(data.last_lesson)profile.lastLesson=data.last_lesson;
@@ -186,16 +192,19 @@
     goLesson(start,false);syncMsg(profile.cloud?'Menghubungkan database...':'Tersimpan di perangkat');}
   async function register(e){e.preventDefault();const name=$('child-name').value.trim();if(name.length<2){alert('Tuliskan nama panggilan minimal 2 huruf.');return}
     if(!$('guardian-agree').checked){alert('Izin orang tua/wali diperlukan untuk mulai.');return}
-    const cloud=$('cloud-optin').checked;profile={name,progress:{},projects:{},lastActive:Date.now(),lastLesson:lessons[0].id,cloud,consent:true};setStore(profile);
+    const previous=restore(),sameChild=!!previous&&norm(previous.name)===norm(name);
+    const cloud=$('cloud-optin').checked;
+    // Hanya melanjutkan progres anak yang sama; nama berbeda berarti profil lokal baru.
+    profile={name,progress:sameChild?previous.progress:{},projects:sameChild?previous.projects:{},lastActive:Date.now(),lastLesson:sameChild?previous.lastLesson:lessons[0].id,cloud,consent:true};setStore(profile);
     const btn=$('start-form').querySelector('button[type=submit]');btn.disabled=true;
-    if(cloud){try{await initCloud();await maybeDownloadCloud();await uploadCloud()}catch(err){activeCloud=false;alert('Penyimpanan daring belum bisa digunakan: '+err.message+'\nKemajuan tetap disimpan di perangkat.');profile.cloud=false;setStore(profile)}}
+    if(cloud){try{await initCloud(!sameChild||!previous.cloud);if(sameChild&&previous.cloud)await maybeDownloadCloud();await uploadCloud()}catch(err){activeCloud=false;alert('Penyimpanan daring belum bisa digunakan: '+err.message+'\nKemajuan tetap disimpan di perangkat.');profile.cloud=false;setStore(profile)}}
     startWorkspace();speakLesson();btn.disabled=false;
   }
   async function deleteAll(){const accepted=confirm('Hapus seluruh nama dan kemajuan anak? Data yang dihapus tidak dapat dipulihkan.');if(!accepted)return;
     stopSound();clearTimeout(syncTimer);
     // Delete remote first; on network failure, keep a warning and let the server's 4-day purge run.
     let errorMessage='';
-    if(activeCloud&&supa){try{const {data:{user}}=await supa.auth.getUser();if(user){const {error}=await supa.from('child_profiles').delete().eq('id',user.id);if(error)throw error}}catch(e){errorMessage=e.message}}
+    if(activeCloud&&supa){try{const {data:{user}}=await supa.auth.getUser();if(user){const {error}=await supa.from('mmp_child_profiles').delete().eq('id',user.id);if(error)throw error}}catch(e){errorMessage=e.message}}
     removeStore();profile=null;activeCloud=false;
     if(errorMessage)alert('Data perangkat sudah dihapus, tetapi data server belum terkonfirmasi terhapus: '+errorMessage+'\nCoba lagi saat online atau tunggu pembersihan berkala di server.');
     location.href=location.pathname+(new URLSearchParams(location.search).get('embed')==='1'?'?embed=1':'');
