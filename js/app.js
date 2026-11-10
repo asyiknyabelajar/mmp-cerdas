@@ -1,4 +1,4 @@
-/* MMP Cerdas v1 — aplikasi statis. Tidak merekam atau menyimpan audio/tinta anak. */
+/* MMP Cerdas v1.3 — perbaikan keamanan evaluasi suara dan OCR anak. Audio/tinta tidak disimpan. */
 (()=>{'use strict';
   const COURSE=window.MMP_COURSE, CFG=window.MMP_CONFIG||{}, TTL=4*24*60*60*1000, STORE_KEY='mmp_cerdas_anak_v1';
   const tasks=['Dengarkan','Baca','Tulis','Bicara'], keys=['listen','read','write','speak'];
@@ -8,7 +8,7 @@
   const norm=s=>String(s??'').toLocaleLowerCase('id-ID').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
   let profile=null, selected=lessons[0], tab=0, lastSpoken='', recognizing=null, listening=false, worker=null, supa=null, syncTimer=0, activeCloud=false, sessionStarted=false;
   let pen={canvas:null,ctx:null,down:false,hasInk:false};
-  let recording=null,recordStream=null,recordUrl=null,recordTimeout=null;
+  let recording=null,recordStream=null,recordUrl=null,recordTimeout=null,ocrPending=false;
   function getStore(){try{return localStorage.getItem(STORE_KEY)}catch{return null}}
   function setStore(v){try{localStorage.setItem(STORE_KEY,JSON.stringify(v));return true}catch{return false}}
   function removeStore(){try{localStorage.removeItem(STORE_KEY)}catch{}}
@@ -67,8 +67,9 @@
     say(msg);touch();}
   function taskState(id,key){return profile?.progress?.[id]?.[key]?.state||''}
   function mark(key,state='latihan',transcript=''){if(!profile)return;
-    profile.progress[selected.id]??={};profile.progress[selected.id][key]={state,time:new Date().toISOString(),source:state==='otomatis'?'auto':'latihan'};
+    profile.progress[selected.id]??={};profile.progress[selected.id][key]={state,time:new Date().toISOString(),source:state==='otomatis'?'auto':state==='terdeteksi'?'pengenal_suara':state==='diverifikasi'?'pendamping':'latihan'};
     touch();renderTabs();refreshStats();renderNavigation();}
+  function markComprehension(){if(!profile)return;profile.progress[selected.id]??={};profile.progress[selected.id].comprehension={state:'terjawab',time:new Date().toISOString()};touch()}
   function countDone(){return Object.values(profile?.progress||{}).reduce((n,p)=>n+keys.filter(k=>p[k]?.state).length,0)}
   function lessonDone(l){return keys.every(k=>taskState(l.id,k))}
   function refreshStats(){const done=countDone();$('sidebar-progress').style.width=(100*done/(lessons.length*4))+'%';$('sidebar-progress-text').textContent=`${done} dari ${lessons.length*4} latihan`;
@@ -97,24 +98,24 @@
     root.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{tab=Number(b.dataset.tab);$('task-feedback').textContent='';touch();renderTabs();renderTask()}));
   }
   function notify(s,warn=false){$('task-feedback').textContent=s;$('task-feedback').classList.toggle('warn',!!warn)}
-  function renderTask(){cleanupRecording();const t=selected.practice;const root=$('task-area');
+  function renderTask(){cleanupRecording();ocrPending=false;const t=selected.practice;const root=$('task-area');
     if(tab===0){root.innerHTML=`<h3>Latihan 1 · Mendengarkan</h3><p class="hint">Dengarkan Bu Rani menyebutkan contoh. Pilih kartu yang sama dengan bunyi yang Ibu ucapkan. Ketuk "Dengar pilihan" bila belum bisa membaca.</p><div class="action-row"><button id="listen-instruction" class="btn gold">Dengarkan soal</button></div><div class="choices">${t.listen.options.map((choice,i)=>`<div><button class="choice" data-choice="${i}" style="width:100%">${esc(choice)}</button><button class="choice-opt" data-hear="${i}">Dengar pilihan ${i+1}</button></div>`).join('')}</div>`;
       $('listen-instruction').onclick=()=>{say(t.listen.speech);touch()};
       root.querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>{const choice=t.listen.options[Number(b.dataset.choice)];if(norm(choice)===norm(t.listen.answer)){mark('listen','otomatis');notify('Hebat! Kamu memilih bunyi yang tepat.');say(`Bagus ${profile.name}! Itu benar, ${choice}.`)}else{notify('Belum cocok. Dengarkan suara Bu Rani sekali lagi, ya.',true);say('Belum tepat, tidak apa-apa. Kita dengarkan ulang, ya.')}});
       root.querySelectorAll('[data-hear]').forEach(b=>b.onclick=()=>{say(t.listen.options[Number(b.dataset.hear)]);touch()});
-    }else if(tab===1){root.innerHTML=`<h3>Latihan 2 · Berlatih membaca</h3><p class="hint">${esc(t.read.instruction)}</p><div class="large-read ${t.read.question?'passage-read':''}">${esc(t.read.display)}</div>${t.read.question?`<div class="comprehension"><strong>Pahami bacaan: ${esc(t.read.question)}</strong><div class="choices">${t.read.options.map((option,i)=>`<button class="choice" data-read-choice="${i}">${esc(option)}</button>`).join('')}</div></div><p class="hint">Untuk pemeriksaan mikrofon, bacalah bagian berikut: <strong>${esc(t.read.checkTarget)}</strong></p>`:''}<div class="action-row"><button id="read-example" class="btn gold">Dengar contoh</button><button id="read-mic" class="btn primary">Baca dengan mikrofon</button><button id="read-manual" class="btn light">Sudah berlatih bersama pendamping</button></div><div class="record-panel"><button id="record-start" class="btn outline small">Rekam suaraku</button><button id="record-stop" class="btn light small" hidden>Hentikan rekaman</button><audio id="record-playback" controls hidden aria-label="Putar rekaman suara sendiri"></audio><small>Rekaman hanya berada sementara di memori browser; tidak disimpan dalam database.</small></div><div class="speech-transcript" id="mic-status">Hasil pengenal suara akan muncul di sini. Gunakan mikrofon dengan izin orang tua/wali.</div>`;
+    }else if(tab===1){root.innerHTML=`<h3>Latihan 2 · Berlatih membaca</h3><p class="hint">${esc(t.read.instruction)}</p><div class="large-read ${t.read.question?'passage-read':''}">${esc(t.read.display)}</div>${t.read.question?`<div class="comprehension"><strong>Pahami bacaan: ${esc(t.read.question)}</strong><div class="choices">${t.read.options.map((option,i)=>`<button class="choice" data-read-choice="${i}">${esc(option)}</button>`).join('')}</div></div><p class="hint">Untuk pemeriksaan mikrofon, bacalah bagian berikut: <strong>${esc(t.read.checkTarget)}</strong></p>`:''}<div class="action-row"><button id="read-example" class="btn gold">Dengar contoh</button><button id="read-mic" class="btn primary">Baca dengan mikrofon</button><button id="read-manual" class="btn light">Pendamping: sudah berlatih membaca</button></div><div class="record-panel"><button id="record-start" class="btn outline small">Rekam suaraku</button><button id="record-stop" class="btn light small" hidden>Hentikan rekaman</button><audio id="record-playback" controls hidden aria-label="Putar rekaman suara sendiri"></audio><small>Rekaman hanya berada sementara di memori browser; tidak disimpan dalam database.</small></div><div class="speech-transcript" id="mic-status">Hasil pengenal suara akan muncul di sini. Gunakan mikrofon dengan izin orang tua/wali.</div>`;
       $('read-example').onclick=()=>{say(t.read.display);touch()};$('read-mic').onclick=()=>checkSpeech(t.read.checkTarget||t.read.display,'read');
-      root.querySelectorAll('[data-read-choice]').forEach(b=>b.onclick=()=>{const choice=t.read.options[Number(b.dataset.readChoice)];if(norm(choice)===norm(t.read.answer)){mark('read','otomatis');notify('Jawaban pemahaman bacaan tepat. Bagus!');say(`Betul ${profile.name}, ${choice}.`)}else{notify('Ayo baca lagi bagian ceritanya dan pilih jawaban yang sesuai.',true);say('Tidak apa-apa, mari baca ceritanya sekali lagi.') }});
-      $('read-manual').onclick=()=>{mark('read','latihan');notify('Latihan tercatat. Minta pendamping memastikan kata telah dibaca dengan benar.');say(`Bagus sudah mencoba, ${profile.name}. Kita akan semakin lancar dengan latihan.`)};setupRecording();
-    }else if(tab===2){root.innerHTML=`<h3>Latihan 3 · Berlatih menulis</h3><p class="hint">${esc(t.write.instruction)} Kamu dapat mengetik atau menggambar tulisan di papan putih.</p><div class="large-read">${esc(t.write.answer)}</div><label for="typing" class="eyebrow">Ketik jawaban di sini</label><input id="typing" class="text-answer" autocomplete="off" autocapitalize="off" placeholder="Tulis jawabanmu..." aria-label="Jawaban tertulis"><div class="action-row"><button id="check-typing" class="btn primary">Periksa ketikan</button><button id="write-example" class="btn light">Dengar kata</button></div><p class="hint" style="margin-top:20px">Atau tulis dengan jari / pena digital pada papan berikut:</p><canvas id="draw-board" class="writing-board" aria-label="Papan untuk menulis tangan" width="640" height="220"></canvas><div class="action-row"><button id="ocr-check" class="btn gold">Kenali tulisan tangan (OCR)</button><button id="draw-clear" class="btn light">Bersihkan papan</button><button id="draw-practice" class="btn outline">Tandai sudah berlatih menulis</button></div><p class="secondary-note">OCR dapat keliru membaca tulisan tangan anak. Tulisan tidak diunggah oleh aplikasi; mesin OCR dimuat di browser dari pustaka daring saat diperlukan.</p><div id="ocr-result" class="drawing-preview hide"></div>`;
+      root.querySelectorAll('[data-read-choice]').forEach(b=>b.onclick=()=>{const choice=t.read.options[Number(b.dataset.readChoice)];if(norm(choice)===norm(t.read.answer)){markComprehension();notify('Jawaban pemahaman bacaan tepat. Bagus! Sekarang bacakan teks dengan mikrofon atau berlatih bersama pendamping.');say(`Betul ${profile.name}, ${choice}. Selanjutnya, ayo kita latihan membaca dengan suara.`)}else{notify('Ayo baca lagi bagian ceritanya dan pilih jawaban yang sesuai.',true);say('Tidak apa-apa, mari baca ceritanya sekali lagi.') }});
+      $('read-manual').onclick=()=>{mark('read','diverifikasi');notify('Latihan bersama pendamping tercatat; kemampuan membaca perlu dinilai langsung oleh pendamping.');say(`Bagus sudah mencoba, ${profile.name}. Kita akan semakin lancar dengan latihan.`)};setupRecording();
+    }else if(tab===2){root.innerHTML=`<h3>Latihan 3 · Berlatih menulis</h3><p class="hint">${esc(t.write.instruction)} Kamu dapat mengetik atau menggambar tulisan di papan putih.</p><div class="large-read">${esc(t.write.answer)}</div><label for="typing" class="eyebrow">Ketik jawaban di sini</label><input id="typing" class="text-answer" autocomplete="off" autocapitalize="off" placeholder="Tulis jawabanmu..." aria-label="Jawaban tertulis"><div class="action-row"><button id="check-typing" class="btn primary">Periksa ketikan</button><button id="write-example" class="btn light">Dengar kata</button></div><p class="hint" style="margin-top:20px">Atau tulis dengan jari / pena digital pada papan berikut:</p><canvas id="draw-board" class="writing-board" aria-label="Papan latihan menulis tangan" width="640" height="220"></canvas><div class="action-row"><button id="ocr-check" class="btn gold">Kenali tulisan tangan (OCR)</button><button id="draw-clear" class="btn light">Bersihkan papan</button><button id="draw-practice" class="btn outline">Pendamping: tulisan sudah dicoba</button></div><p class="secondary-note">OCR hanyalah perkiraan mesin, bukan penilaian bentuk atau urutan goresan huruf. Tulisan tidak disimpan oleh aplikasi; pustaka OCR dimuat dari jaringan saat diperlukan.</p><div id="ocr-result" class="drawing-preview hide"></div>`;
       $('write-example').onclick=()=>{say(t.write.answer);touch()};$('check-typing').onclick=()=>checkWriting($('typing').value,'ketikan');
-      $('typing').onkeydown=e=>{if(e.key==='Enter')checkWriting($('typing').value,'ketikan')};
+      $('typing').oninput=()=>{ocrPending=false};$('typing').onkeydown=e=>{if(e.key==='Enter')checkWriting($('typing').value,'ketikan')};
       $('draw-clear').onclick=()=>{clearCanvas();touch()};$('ocr-check').onclick=recognizeInk;
-      $('draw-practice').onclick=()=>{if(!pen.hasInk){notify('Silakan menulis di papan terlebih dahulu.',true);return}mark('write','latihan');notify('Usaha menulis tercatat. Pendamping dapat membantu mengecek bentuk huruf dan urutannya.');say('Terima kasih sudah berusaha menulis. Ibu bangga kamu mencoba.')};
+      $('draw-practice').onclick=()=>{if(!pen.hasInk){notify('Silakan menulis di papan terlebih dahulu.',true);return}mark('write','diverifikasi');notify('Usaha menulis dengan pendamping tercatat. Pendamping dapat membantu mengecek bentuk huruf dan urutannya.');say('Terima kasih sudah berusaha menulis. Ibu bangga kamu mencoba.')};
       initCanvas();
-    }else{root.innerHTML=`<h3>Latihan 4 · Berlatih berbicara</h3><p class="hint">${esc(t.speak.instruction)}</p><div class="large-read">${esc(t.speak.target)}</div><div class="action-row"><button id="speak-example" class="btn gold">Dengar contoh</button><button id="speak-mic" class="btn primary">Bicara dengan mikrofon</button><button id="speak-manual" class="btn light">Sudah berbicara bersama pendamping</button></div><div class="record-panel"><button id="record-start" class="btn outline small">Rekam suaraku</button><button id="record-stop" class="btn light small" hidden>Hentikan rekaman</button><audio id="record-playback" controls hidden aria-label="Putar rekaman suara sendiri"></audio><small>Rekaman hanya berada sementara di memori browser; tidak disimpan dalam database.</small></div><div class="speech-transcript" id="mic-status">Bicaralah dekat mikrofon, pelan, dan jelas. Coba beberapa kali bila pengenal suara belum tepat.</div>`;
+    }else{root.innerHTML=`<h3>Latihan 4 · Berlatih berbicara</h3><p class="hint">${esc(t.speak.instruction)}</p><div class="large-read">${esc(t.speak.target)}</div><div class="action-row"><button id="speak-example" class="btn gold">Dengar contoh</button><button id="speak-mic" class="btn primary">Bicara dengan mikrofon</button><button id="speak-manual" class="btn light">Pendamping: sudah berlatih berbicara</button></div><div class="record-panel"><button id="record-start" class="btn outline small">Rekam suaraku</button><button id="record-stop" class="btn light small" hidden>Hentikan rekaman</button><audio id="record-playback" controls hidden aria-label="Putar rekaman suara sendiri"></audio><small>Rekaman hanya berada sementara di memori browser; tidak disimpan dalam database.</small></div><div class="speech-transcript" id="mic-status">Bicaralah dekat mikrofon, pelan, dan jelas. Coba beberapa kali bila pengenal suara belum tepat.</div>`;
       $('speak-example').onclick=()=>{say(t.speak.target);touch()};$('speak-mic').onclick=()=>checkSpeech(t.speak.target,'speak');
-      $('speak-manual').onclick=()=>{mark('speak','latihan');notify('Latihan bicara tercatat tanpa penilaian otomatis. Pendamping dapat memberi umpan balik.');say(`Bagus ${profile.name}, terima kasih sudah mau berbicara.`)};setupRecording();
+      $('speak-manual').onclick=()=>{mark('speak','diverifikasi');notify('Latihan bicara tercatat tanpa penilaian otomatis. Pendamping dapat memberi umpan balik.');say(`Bagus ${profile.name}, terima kasih sudah mau berbicara.`)};setupRecording();
     }
   }
   function cleanupRecording(){clearTimeout(recordTimeout);
@@ -142,29 +143,50 @@
     stop.onclick=()=>{clearTimeout(recordTimeout);if(recording?.state==='recording')recording.stop()};
   }
   function checkWriting(value,mode){if(!value.trim()){notify('Coba ketik atau tulis jawabannya dahulu, ya.',true);return}
+    if(ocrPending){notify('Hasil OCR tidak boleh dinilai otomatis. Mintalah pendamping memeriksa tulisan pada papan atau ketik ulang jawabannya sendiri.',true);return}
     const expected=norm(selected.practice.write.answer),actual=norm(value);if(expected===actual){mark('write','otomatis');notify(`Bagus, ${profile.name}! ${mode==='ketikan'?'Ketikan':'Tulisan yang terdeteksi'} cocok dengan contoh.`);say(`Luar biasa ${profile.name}, tulisanmu cocok!`)}
     else{notify(`Bu Rani membaca: “${value}”. Coba bandingkan dengan contoh: “${selected.practice.write.answer}”.`,true);say('Kamu sudah berusaha. Mari kita periksa huruf demi huruf, ya.')}
   }
-  function matchSpeech(actual,expected){const a=norm(actual),e=norm(expected);if(!a||!e)return false;
-    if(a===e||a.includes(e))return true; // Consider substring when recognizer adds words around target.
+  function matchSpeech(actual,expected){
+    const a=norm(actual), e=norm(expected);
+    if(!a||!e)return false;
+    if(a===e)return true;
+    // Match complete target words/phrases only: target "a" must never match "makan".
+    if(e.length>=3&&(' '+a+' ').includes(' '+e+' '))return true;
+    // Allow one character of ASR variance for longer targets, not phonemes/syllables.
     const ed=(x,y)=>{const dp=Array.from({length:y.length+1},(_,j)=>j);for(let i=1;i<=x.length;i++){let prev=dp[0];dp[0]=i;for(let j=1;j<=y.length;j++){const old=dp[j];dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(x[i-1]===y[j-1]?0:1));prev=old}}return dp[y.length]};
-    return e.length>=5 && Math.abs(a.length-e.length)<=1 && ed(a,e)<=1;
+    return e.length>=5&&a.length>=4&&Math.abs(a.length-e.length)<=1&&ed(a,e)<=1;
   }
   function checkSpeech(expected,key){const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!Speech){notify('Browser belum menyediakan pengenal suara. Gunakan Chrome/Edge terkini atau tombol latihan bersama pendamping.',true);return}
-    if(listening){notify('Mikrofon masih digunakan. Silakan selesaikan dulu.',true);return}
+    if(!Speech){notify('Browser belum menyediakan pengenal suara. Gunakan Chrome/Edge terbaru atau pendamping.',true);return}
+    if(listening){notify('Mikrofon masih digunakan. Silakan selesaikan dahulu.',true);return}
     stopSound();const status=$('mic-status');if(status)status.textContent='Mendengarkan suara... silakan berbicara.';
+    const startLesson=selected.id, target=norm(expected);
     try{const rec=new Speech();recognizing=rec;listening=true;rec.lang='id-ID';rec.continuous=false;rec.interimResults=true;rec.maxAlternatives=5;
-      let finalResults=[],received=false;
-      rec.onresult=event=>{let interim='';for(let i=event.resultIndex;i<event.results.length;i++){
-        const r=event.results[i],choices=Array.from(r).map(a=>String(a.transcript||''));
-        if(r.isFinal){finalResults.push(...choices);received=true}else interim=choices[0]||'';
-      }
-      if(status)status.textContent=`Terdengar: ${finalResults[0]||interim||'...'}${interim?' (sedang diproses)':''}`;
-      if(received){received=false;const candidates=[...new Set(finalResults)];if(candidates.some(t=>matchSpeech(t,expected))){mark(key,'otomatis',candidates[0]||'');notify('Bacaan dikenali sesuai target. Hebat! Hasil ini tetap perlu dikonfirmasi pendamping bila pelafalannya belum jelas.');say(`Bagus sekali ${profile.name}! Terus semangat, ya.`)}else{notify(`Terdeteksi “${candidates[0]||'-'}”. Targetnya “${expected}”. Mesin bisa keliru mengenali suara anak. Coba sekali lagi atau gunakan pendamping.`,true);}
-      }};
-      rec.onerror=ev=>{if(status)status.textContent='Mikrofon: '+ev.error;notify('Pengenalan suara tidak berhasil ('+ev.error+'). Coba ulangi atau minta pendamping mengecek.',true)};
-      rec.onend=()=>{listening=false;recognizing=null};rec.start();touch();
+      let done=false;
+      rec.onresult=event=>{if(!profile||selected.id!==startLesson||done)return;
+        let interim='', candidates=[];
+        for(let i=0;i<event.results.length;i++){
+          const r=event.results[i];const choices=Array.from(r).map(a=>String(a.transcript||''));
+          if(r.isFinal)candidates.push(...choices);else if(!interim)interim=choices[0]||'';
+        }
+        candidates=[...new Set(candidates)];
+        if(status)status.textContent=`Terdengar: ${candidates[0]||interim||'...'}${interim?' (sedang diproses)':''}`;
+        if(!candidates.length)return;
+        done=true;
+        if(target.length<=2){
+          notify('Suara singkat sudah diproses, tetapi bunyi satu huruf atau satu suku kata tidak dapat dinilai dengan andal oleh mesin umum. Minta pendamping mendengarkan dan konfirmasi latihan.',true);
+        }else if(candidates.some(t=>matchSpeech(t,expected))){
+          mark(key,'terdeteksi');
+          notify('Pengenal suara mendeteksi ucapan yang cocok. Ini bukti latihan, bukan penilaian ketepatan pelafalan oleh guru.');
+          say(`Terima kasih, ${profile.name}! Ibu senang kamu sudah mencoba. Mari lanjut latihan.`);
+        }else{
+          notify(`Terdeteksi “${candidates[0]||'-'}”, sedangkan targetnya “${expected}”. Mesin bisa keliru mengenali suara anak. Coba ulangi atau minta pendamping memeriksa.`,true);
+        }
+      };
+      rec.onerror=ev=>{if(!profile||selected.id!==startLesson)return;if(status)status.textContent='Mikrofon: '+ev.error;notify('Pengenalan suara tidak berhasil ('+ev.error+'). Coba ulangi atau minta pendamping mengecek.',true)};
+      rec.onend=()=>{listening=false;if(recognizing===rec)recognizing=null};
+      rec.start();touch();
     }catch(error){listening=false;recognizing=null;notify('Mikrofon tidak dapat dimulai: '+error.message,true)}
   }
   function initCanvas(){const canvas=$('draw-board'),ctx=canvas.getContext('2d',{willReadFrequently:true});pen={canvas,ctx,down:false,hasInk:false};
@@ -180,8 +202,8 @@
       const psm=selected.practice.write.answer.trim().length===1?window.Tesseract.PSM.SINGLE_CHAR:window.Tesseract.PSM.SINGLE_LINE;
       await worker.setParameters({tessedit_pageseg_mode:psm,tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,!?' });
       const {data}=await worker.recognize(pen.canvas);const result=(data.text||'').trim();const info=$('ocr-result');info.classList.remove('hide');
-      info.textContent=`Hasil baca mesin: “${result||'(belum dikenali)'}”. Ini hanya perkiraan OCR. Kamu bisa memperbaiki hasilnya pada kotak ketikan sebelum dinilai.`;
-      $('typing').value=result;if(result)checkWriting(result,'OCR');else notify('Mesin belum mengenali bentuk tulisan. Coba tulis lebih besar, atau minta bantuan pendamping.',true);
+      info.textContent=`Hasil baca mesin: “${result||'(belum dikenali)'}”. Ini hanya perkiraan OCR, bukan penilaian tulisan tangan. Periksa hasilnya bersama pendamping.`;
+      $('typing').value=result;ocrPending=!!result;if(result)notify('OCR mengusulkan bacaan tulisan. Silakan periksa bersama pendamping; hasil ini belum menandai latihan menulis sebagai benar.');else notify('Mesin belum mengenali bentuk tulisan. Coba tulis lebih besar, atau minta bantuan pendamping.',true);
     }catch(error){notify('OCR tidak tersedia: '+error.message+'. Kamu tetap dapat mengetik atau meminta pendamping memeriksa tulisan.',true)}
     finally{btn.disabled=false;btn.textContent='Kenali tulisan tangan (OCR)'}
   }
